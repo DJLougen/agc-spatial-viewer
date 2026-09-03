@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Adaptive Geometric Compression - Vision Pro Spatial Stream</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #07080c; color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      user-select: none; -webkit-user-select: none;
+    }
+    #app { position: relative; width: 100%; height: 100%; }
+
+    .hud {
+      position: fixed; top: 16px; left: 16px; right: 16px;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      pointer-events: none; z-index: 100; gap: 12px;
+    }
+    .hud-left {
+      pointer-events: auto; display: flex; flex-direction: column; gap: 8px;
+      background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 16px; padding: 12px 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+    .hud-header { display: flex; align-items: center; gap: 10px; }
+    .hud-title { font-weight: 700; color: #ffffff; font-size: 15px; }
+    .hud-sep { color: #64748b; }
+    .hud-status { color: #94a3b8; font-size: 13px; }
+    .scene-selector { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+    .btn-scene {
+      min-height: 48px; min-width: 48px; padding: 8px 14px;
+      background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #f1f5f9; border-radius: 12px; font-size: 13px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .btn-scene:hover { background: rgba(255, 255, 255, 0.16); }
+    .btn-scene.active {
+      background: #2563eb; border-color: #3b82f6; color: #ffffff;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+    }
+    .btn-focus {
+      min-height: 48px; min-width: 48px; padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #94a3b8; border-radius: 12px; font-size: 13px; font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-focus:hover { color: #fff; background: rgba(255, 255, 255, 0.14); }
+    .back-link {
+      color: #38bdf8; text-decoration: none; font-size: 12px; font-weight: 600;
+      display: inline-flex; align-items: center; gap: 4px; margin-top: 2px;
+    }
+    .back-link:hover { text-decoration: underline; }
+
+    .hud-right { pointer-events: auto; display: flex; gap: 8px; }
+    .btn-xr {
+      display: none; min-width: 48px; min-height: 48px; padding: 12px 24px;
+      background: #2563eb; color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 14px; font-size: 15px; font-weight: 700; cursor: pointer;
+      box-shadow: 0 4px 18px rgba(37, 99, 235, 0.4);
+    }
+    .btn-xr:hover { background: #1d4ed8; }
+
+    #qr-card {
+      position: fixed; bottom: 20px; right: 20px;
+      background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px;
+      padding: 16px; display: none; flex-direction: column; align-items: center;
+      gap: 10px; z-index: 100; pointer-events: auto;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5); max-width: 272px;
+    }
+    .qr-top { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+    .qr-header { font-size: 13px; font-weight: 600; color: #f8fafc; }
+    .qr-close { background: none; border: none; color: #94a3b8; font-size: 16px; cursor: pointer; }
+    #qr-canvas { width: 240px; height: 240px; border-radius: 8px; background: #ffffff; }
+    .qr-text { font-size: 12px; color: #94a3b8; word-break: break-all; text-align: center; }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+  <script src="./lib/agc_decoder.js"></script>
+  <script type="module" src="./lib/agc_viewer.js"></script>
+</head>
+<body>
+  <div id="app">
+    <agc-viewer id="view" src="./train_balanced.agc" up="z" max-points="80000" auto-rotate background="#07080c" style="position:fixed;inset:0;width:100%;height:100%;"></agc-viewer>
+
+    <div class="hud">
+      <div class="hud-left">
+        <div class="hud-header">
+          <span class="hud-title">AGC Spatial Stream</span>
+          <span class="hud-sep">·</span>
+          <span id="status" class="hud-status">Streaming...</span>
+        </div>
+        <div class="scene-selector">
+          <button class="btn-scene active" data-scene="train">🚂 Train</button>
+          <button class="btn-scene" data-scene="drjohnson">🗿 Statue</button>
+          <button class="btn-scene" data-scene="playroom">🧸 Room</button>
+          <button class="btn-focus" id="btn-focus" title="Recenter camera">🎯 Focus</button>
+        </div>
+        <a href="./" class="back-link">← Product Demo & Benchmarks</a>
+      </div>
+      <div class="hud-right">
+        <button id="btn-xr" class="btn-xr">Enter Immersive</button>
+      </div>
+    </div>
+
+    <div id="qr-card">
+      <div class="qr-top">
+        <span class="qr-header">Vision Pro Safari Stream</span>
+        <button id="qr-close" class="qr-close">✕</button>
+      </div>
+      <canvas id="qr-canvas" width="240" height="240"></canvas>
+      <div id="qr-text" class="qr-text"></div>
+    </div>
+  </div>
+
+  <script>
+    (async function() {
+      const viewer = document.getElementById('view');
+      const statusEl = document.getElementById('status');
+      const btnXr = document.getElementById('btn-xr');
+      const btnFocus = document.getElementById('btn-focus');
+      const qrCard = document.getElementById('qr-card');
+      const qrClose = document.getElementById('qr-close');
+      const qrCanvas = document.getElementById('qr-canvas');
+      const qrText = document.getElementById('qr-text');
+
+      let currentScene = 'train';
+      const SCENE_VIEWPOINTS = {
+        train: { target: [-0.2, 0.0, 0.0], eye: [3.8, 1.2, 5.2] },
+        drjohnson: { target: [-0.6, 1.0, 0.1], eye: [-0.6, 1.8, 6.8] },
+        playroom: { target: [0.0, 0.0, 0.0], eye: [2.5, 1.5, 3.5] }
+      };
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const sceneParam = urlParams.get('scene');
+      if (sceneParam && ['train', 'drjohnson', 'playroom'].includes(sceneParam)) {
+        switchScene(sceneParam);
+      } else {
+        const customSrc = urlParams.get('src');
+        if (customSrc && !customSrc.startsWith('javascript:')) {
+          viewer.setAttribute('src', customSrc);
+        }
+      }
+
+      viewer.addEventListener('load', () => {
+        statusEl.textContent = 'Pinch to orbit · two-finger zoom';
+      });
+      viewer.addEventListener('error', () => {
+        statusEl.textContent = 'Failed to load AGC stream';
+      });
+
+      function switchScene(sceneKey) {
+        currentScene = sceneKey;
+        document.querySelectorAll('.btn-scene').forEach((b) => {
+          b.classList.toggle('active', b.dataset.scene === sceneKey);
+        });
+        statusEl.textContent = 'Streaming...';
+        viewer.setAttribute('src', `./${sceneKey}_balanced.agc`);
+      }
+
+      document.querySelectorAll('.btn-scene').forEach((btn) => {
+        btn.addEventListener('click', () => switchScene(btn.dataset.scene));
+      });
+
+      if (btnFocus) {
+        btnFocus.addEventListener('click', () => {
+          if (viewer._controls && viewer._camera) {
+            const vp = SCENE_VIEWPOINTS[currentScene] || SCENE_VIEWPOINTS.train;
+            viewer._controls.target.set(vp.target[0], vp.target[1], vp.target[2]);
+            viewer._camera.position.set(vp.eye[0], vp.eye[1], vp.eye[2]);
+            viewer._controls.update();
+          }
+        });
+      }
+
+      // Check WebXR
+      try {
+        if (window.isSecureContext && navigator.xr && await navigator.xr.isSessionSupported('immersive-vr')) {
+          btnXr.style.display = 'inline-block';
+          btnXr.addEventListener('click', async () => {
+            try {
+              await viewer.enterImmersive();
+            } catch (err) {
+              statusEl.textContent = (err && err.message) ? err.message : 'WebXR immersive failed';
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('WebXR check error:', err);
+      }
+
+      // Show QR on desktop
+      if (typeof QRCode !== 'undefined' && qrCanvas) {
+        const isVisionOrMobile = /Mobile|Vision|Oculus|Quest/i.test(navigator.userAgent);
+        if (!isVisionOrMobile && window.innerWidth >= 600) {
+          qrCard.style.display = 'flex';
+          const targetUrl = window.location.href;
+          qrText.textContent = 'Scan with Vision Pro to open: ' + targetUrl;
+          QRCode.toCanvas(qrCanvas, targetUrl, { width: 240, margin: 1 }, (err) => {
+            if (err) console.error('QRCode failed:', err);
+          });
+        }
+      }
+
+      if (qrClose) {
+        qrClose.addEventListener('click', () => {
+          qrCard.style.display = 'none';
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
