@@ -92,7 +92,7 @@
   </script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
   <script src="./lib/agc_decoder.js"></script>
-  <script type="module" src="./lib/agc_viewer.js?v=20260903_v5"></script>
+  <script type="module" src="./lib/agc_viewer.js?v=20260903_v7"></script>
 </head>
 <body>
   <div id="app">
@@ -141,7 +141,7 @@
 
       let currentScene = 'train';
       const SCENE_VIEWPOINTS = {
-        train: { target: [-0.2, 0.0, 0.0], eye: [3.8, 1.2, 5.2] },
+        train: { target: [-0.5, 0.0, 0.0], eye: [0.0, 0.2, 5.2] },
         drjohnson: { target: [-0.6, 1.0, 0.1], eye: [-0.6, 1.8, 6.8] },
         playroom: { target: [0.0, 0.0, 0.0], eye: [2.5, 1.5, 3.5] }
       };
@@ -159,6 +159,12 @@
 
       viewer.addEventListener('load', () => {
         statusEl.textContent = 'Pinch to orbit · two-finger zoom';
+        if (viewer._controls && viewer._camera) {
+          const vp = SCENE_VIEWPOINTS[currentScene] || SCENE_VIEWPOINTS.train;
+          viewer._controls.target.set(vp.target[0], vp.target[1], vp.target[2]);
+          viewer._camera.position.set(vp.eye[0], vp.eye[1], vp.eye[2]);
+          viewer._controls.update();
+        }
       });
       viewer.addEventListener('error', () => {
         statusEl.textContent = 'Failed to load AGC stream';
